@@ -1,0 +1,73 @@
+import React from 'react';
+import { format, setHours, setMinutes, isSameMinute, addMinutes } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
+
+interface AgendaViewProps {
+  consultas: any[];
+  date: Date;
+  onSlotClick: (date: Date) => void;
+  isLoading: boolean;
+}
+
+const AgendaView: React.FC<AgendaViewProps> = ({ consultas, date, onSlotClick, isLoading }) => {
+  const navigate = useNavigate();
+  const horarios = [];
+  let currentTime = setMinutes(setHours(date, 8), 0);
+  const endTime = setMinutes(setHours(date, 18), 0);
+
+  while (currentTime < endTime) {
+    horarios.push(currentTime);
+    currentTime = addMinutes(currentTime, 30);
+  }
+
+  const getConsultaForHorario = (horario: Date) => {
+    return consultas.find(c => isSameMinute(new Date(c.data_hora), horario));
+  };
+
+  const handleConsultaClick = (consultaId: string) => {
+    navigate(`/atendimento/${consultaId}`);
+  };
+
+  if (isLoading) {
+    return <div className="text-center py-8">Carregando agenda...</div>;
+  }
+
+  return (
+    <div className="divide-y divide-gray-200 dark:divide-gray-700">
+      {horarios.map((horario, index) => {
+        const consulta = getConsultaForHorario(horario);
+        const isClickable = !consulta;
+
+        return (
+          <div key={index} className="flex">
+            <div className="w-24 text-right pr-4 py-4 text-sm text-gray-500 dark:text-gray-400">
+              {format(horario, 'HH:mm')}
+            </div>
+            <div
+              className={`flex-1 border-l border-gray-200 dark:border-gray-700 p-2 ${isClickable ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50' : ''}`}
+              onClick={() => isClickable && onSlotClick(horario)}
+            >
+              {consulta ? (
+                <div 
+                  className="bg-primary-100 dark:bg-primary-900/50 p-2 rounded-lg h-full cursor-pointer hover:shadow-md transition-shadow"
+                  onClick={() => handleConsultaClick(consulta.id)}
+                >
+                  <p className="font-semibold text-primary-800 dark:text-primary-200 text-sm">
+                    {consulta.atendimentos.pacientes.nome}
+                  </p>
+                  <p className="text-xs text-primary-600 dark:text-primary-300">
+                    {consulta.tipo}
+                  </p>
+                </div>
+              ) : (
+                <div className="h-full"></div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+export default AgendaView;

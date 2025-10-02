@@ -1,0 +1,62 @@
+import React, { ReactNode } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+
+interface PopoverProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  trigger: React.ReactElement;
+  content: ReactNode;
+  contentProps?: React.HTMLAttributes<HTMLDivElement>;
+}
+
+const Popover: React.FC<PopoverProps> = ({ open, onOpenChange, trigger, content, contentProps }) => {
+  const triggerRef = React.useRef<HTMLElement>(null);
+
+  const handleTriggerClick = () => {
+    onOpenChange(!open);
+  };
+
+  const handleClose = () => {
+    onOpenChange(false);
+  };
+
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (triggerRef.current && !triggerRef.current.contains(event.target as Node)) {
+        handleClose();
+      }
+    };
+    if (open) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [open]);
+  
+  const clonedTrigger = React.cloneElement(trigger, {
+    ref: triggerRef,
+    onClick: handleTriggerClick,
+  });
+
+  return (
+    <div className="relative w-full">
+      {clonedTrigger}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="absolute z-10 mt-2 w-full bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700"
+            {...contentProps}
+          >
+            {content}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+export default Popover;

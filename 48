@@ -1,0 +1,86 @@
+import React, { useState, useCallback } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { AgendamentoFormValues, agendamentoSchema } from '../../lib/schemas';
+import { supabase } from '../../lib/supabase';
+import { Tables } from '../../types/supabase';
+import Button from '../ui/Button';
+import Combobox from '../ui/Combobox';
+import Input from '../ui/Input';
+
+interface AgendamentoFormProps {
+  onSubmit: (data: AgendamentoFormValues) => void;
+  isSubmitting: boolean;
+  onCancel: () => void;
+}
+
+const AgendamentoForm: React.FC<AgendamentoFormProps> = ({ onSubmit, isSubmitting, onCancel }) => {
+  const [pacientes, setPacientes] = useState<Tables<'pacientes'>[]>([]);
+
+  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<AgendamentoFormValues>({
+    resolver: zodResolver(agendamentoSchema),
+  });
+
+  const selectedPaciente = watch('paciente');
+
+  const searchPacientes = useCallback(async (term: string) => {
+    if (term.length < 2) {
+      setPacientes([]);
+      return;
+    }
+    const { data, error } = await supabase
+      .from('pacientes')
+      .select('id, nome')
+      .ilike('nome', `%${term}%`)
+      .limit(10);
+    
+    if (data) setPacientes(data);
+  }, []);
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <div className="space-y-4">
+        <Combobox
+          label="Paciente"
+          items={pacientes}
+          value={selectedPaciente}
+          onChange={(paciente) => setValue('paciente', paciente as any, { shouldValidate: true })}
+          placeholder="Digite para buscar um paciente..."
+          onSearchChange={searchPacientes}
+        />
+        {errors.paciente && <p className="text-sm text-red-600 dark:text-red-400">{errors.paciente.message}</p>}
+
+        <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo de Consulta</label>
+            <select
+                {...register('tipo')}
+                className="block w-full px-3 py-2 border rounded-md shadow-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+            >
+                <option value="1ª Consulta">1ª Consulta</option>
+                <option value="Rotina">Rotina</option>
+                <option value="Manutenção">Manutenção</option>
+                <option value="Alta">Alta</option>
+            </select>
+            {errors.tipo && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.tipo.message}</p>}
+        </div>
+
+        <Input
+          label="Observações (Opcional)"
+          {...register('observacoes')}
+          error={errors.observacoes?.message}
+          placeholder="Alguma observação sobre a consulta..."
+        />
+      </div>
+      <div className="flex items-center justify-end p-4 border-t border-gray-200 dark:border-gray-700 rounded-b mt-6 -mx-6 -mb-6">
+        <Button type="button" variant="secondary" onClick={onCancel} disabled={isSubmitting}>
+          Cancelar
+        </Button>
+        <Button type="submit" className="ml-3" disabled={isSubmitting}>
+          {isSubmitting ? 'Agendando...' : 'Agendar Consulta'}
+        </Button>
+      </div>
+    </form>
+  );
+};
+
+export default AgendamentoForm;

@@ -1,0 +1,66 @@
+import { z } from 'zod';
+
+export const pacienteSchema = z.object({
+  nome: z.string().min(3, { message: 'O nome deve ter pelo menos 3 caracteres.' }),
+  data_nascimento: z.string().refine((val) => !isNaN(Date.parse(val)), {
+    message: "Data de nascimento inválida.",
+  }),
+  telefone: z.string().min(10, { message: 'O telefone deve ter pelo menos 10 dígitos.' }),
+  email: z.string().email({ message: 'E-mail inválido.' }).optional().or(z.literal('')),
+  endereco: z.string().optional(),
+});
+
+export type PacienteFormValues = z.infer<typeof pacienteSchema>;
+
+
+// Schema para validação do formulário de profissional
+export const profissionalSchema = z.object({
+  nome: z.string().min(3, { message: "O nome deve ter pelo menos 3 caracteres." }),
+  email: z.string().email({ message: "E-mail inválido." }),
+  especialidade: z.string().optional(),
+  telefone: z.string().optional(),
+  // A senha só é obrigatória na criação
+  password: z.string().min(6, { message: "A senha deve ter pelo menos 6 caracteres." }).optional(),
+  confirmPassword: z.string().optional(),
+}).refine((data) => {
+    // Se a senha for fornecida, a confirmação também deve ser e elas devem ser iguais.
+    if (data.password && data.password !== data.confirmPassword) {
+        return false;
+    }
+    return true;
+}, {
+    message: "As senhas não coincidem.",
+    path: ["confirmPassword"],
+});
+
+export type ProfissionalFormValues = z.infer<typeof profissionalSchema>;
+
+// Schema para validação do formulário de consultório
+export const consultorioSchema = z.object({
+  nome: z.string().min(3, { message: 'O nome deve ter pelo menos 3 caracteres.' }),
+  endereco: z.string().min(10, { message: 'O endereço deve ter pelo menos 10 caracteres.' }),
+  telefone: z.string().optional(),
+});
+
+export type ConsultorioFormValues = z.infer<typeof consultorioSchema>;
+
+// Schema para validação do formulário de agendamento
+export const agendamentoSchema = z.object({
+  paciente: z.object({
+    id: z.string(),
+    nome: z.string(),
+  }),
+  tipo: z.enum(["1ª Consulta", "Rotina", "Manutenção", "Alta"]),
+  observacoes: z.string().optional(),
+});
+
+export type AgendamentoFormValues = z.infer<typeof agendamentoSchema>;
+
+// Schema para validação do formulário de procedimento do odontograma
+export const procedimentoSchema = z.object({
+  procedimento: z.string().min(3, { message: "O procedimento é obrigatório." }),
+  face: z.string().optional(),
+  observacao: z.string().max(500, { message: "Máximo de 500 caracteres." }).optional(),
+});
+
+export type ProcedimentoFormValues = z.infer<typeof procedimentoSchema>;

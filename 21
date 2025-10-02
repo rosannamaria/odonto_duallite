@@ -1,0 +1,71 @@
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { supabase } from '../lib/supabase';
+import { AuthSession, User } from '@supabase/supabase-js';
+import { Tables } from '../types/supabase';
+
+type Profile = Tables<'profissionais'>;
+
+interface AuthContextType {
+  user: User | null;
+  session: AuthSession | null;
+  profile: Profile | null;
+  loading: boolean;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<AuthSession | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        setSession(session);
+        const currentUser = session?.user ?? null;
+        setUser(currentUser);
+
+        if (currentUser) {
+          const { data: profileData, error: profileError } = await supabase
+            .from('profissionais')
+            .select('*')
+            .eq('id', currentUser.id)
+            .single();
+          
+          setProfile(profileData || null);
+          if (profileError && profileError.code !== 'PGRST116') { // Ignore "exact one row" error on logout
+            console.error("Error fetching profile on auth state change:", profileError);
+          }
+        } else {
+          setProfile(null);
+        }
+        
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  const value = {
+    session,
+    user,
+    profile,
+    loading,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+}

@@ -1,0 +1,39 @@
+import React from 'react';
+import { format } from 'date-fns';
+
+interface ProcedimentosHistoryProps {
+  procedimentos: any[];
+}
+
+const ProcedimentosHistory: React.FC<ProcedimentosHistoryProps> = ({ procedimentos }) => {
+  if (procedimentos.length === 0) {
+    return <p className="text-sm text-gray-500 dark:text-gray-400">Nenhum procedimento registrado para este paciente.</p>;
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <thead className="bg-gray-50 dark:bg-gray-700">
+          <tr>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Data</th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Dente</th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Procedimento</th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Profissional</th>
+          </tr>
+        </thead>
+        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+          {procedimentos.map((proc) => (
+            <tr key={proc.id}>
+              <td className="px-4 py-2 whitespace-nowrap text-sm">{format(new Date(proc.created_at), 'dd/MM/yyyy')}</td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm font-semibold">{proc.dente}</td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm">{proc.procedimento}</td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{proc.consultas.profissionais.nome}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+export default ProcedimentosHistory;

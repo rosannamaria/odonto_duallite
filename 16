@@ -1,0 +1,126 @@
+/*
+# [Criação do Esquema Inicial do Banco de Dados de Odontologia]
+Este script cria todas as tabelas necessárias para o sistema de gerenciamento de odontologia, incluindo pacientes, profissionais, consultórios, agendamentos, atendimentos, consultas e procedimentos.
+
+## Descrição da Query:
+- Cria tabelas para armazenar dados essenciais.
+- Estabelece relacionamentos entre as tabelas usando chaves estrangeiras.
+- Habilita a Segurança em Nível de Linha (RLS) para todas as tabelas para garantir a privacidade e o controle de acesso aos dados.
+- Não há dados existentes, portanto, não há risco de perda de dados.
+
+## Metadados:
+- Categoria do Esquema: "Structural"
+- Nível de Impacto: "High"
+- Requer Backup: false
+- Reversível: true (pode ser revertido com outro script)
+
+## Detalhes da Estrutura:
+- Tabelas Criadas:
+  - `pacientes`: Armazena informações dos pacientes.
+  - `profissionais`: Armazena informações dos profissionais de odontologia.
+  - `consultorios`: Armazena informações dos consultórios.
+  - `agendas`: Gerencia a disponibilidade de horários dos profissionais nos consultórios.
+  - `atendimentos`: Agrupa todas as consultas de um paciente.
+  - `consultas`: Registra cada visita individual do paciente.
+  - `procedimentos`: Registra os procedimentos realizados em cada dente do paciente.
+
+## Implicações de Segurança:
+- Status RLS: Habilitado em todas as tabelas.
+- Alterações de Política: Nenhuma política é criada neste script, mas a base para elas é estabelecida.
+- Requisitos de Autenticação: O acesso aos dados dependerá das políticas de RLS a serem criadas.
+
+## Impacto no Desempenho:
+- Índices: As chaves primárias e estrangeiras são indexadas por padrão.
+- Triggers: Nenhum trigger é adicionado neste script.
+- Impacto Estimado: Baixo. A criação de tabelas vazias não impacta o desempenho.
+*/
+
+-- Tabela de Pacientes
+CREATE TABLE pacientes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nome VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE,
+    telefone VARCHAR(20),
+    data_nascimento DATE,
+    hipertenso BOOLEAN DEFAULT false,
+    diabetico BOOLEAN DEFAULT false,
+    gestante BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE pacientes ENABLE ROW LEVEL SECURITY;
+COMMENT ON TABLE pacientes IS 'Armazena informações cadastrais dos pacientes.';
+
+-- Tabela de Profissionais
+CREATE TABLE profissionais (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nome VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    especialidade VARCHAR(100),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE profissionais ENABLE ROW LEVEL SECURITY;
+COMMENT ON TABLE profissionais IS 'Armazena informações dos profissionais de odontologia.';
+
+-- Tabela de Consultórios
+CREATE TABLE consultorios (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nome VARCHAR(255) NOT NULL,
+    endereco TEXT NOT NULL,
+    telefone VARCHAR(20),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE consultorios ENABLE ROW LEVEL SECURITY;
+COMMENT ON TABLE consultorios IS 'Armazena informações dos consultórios.';
+
+-- Tabela de Agendas (Disponibilidade)
+CREATE TABLE agendas (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    profissional_id UUID REFERENCES profissionais(id) ON DELETE CASCADE,
+    consultorio_id UUID REFERENCES consultorios(id) ON DELETE CASCADE,
+    dia_semana INT NOT NULL, -- 0: Domingo, 1: Segunda, ..., 6: Sábado
+    hora_inicio TIME NOT NULL,
+    hora_fim TIME NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE agendas ENABLE ROW LEVEL SECURITY;
+COMMENT ON TABLE agendas IS 'Define os horários de trabalho dos profissionais em cada consultório.';
+
+-- Tabela de Atendimentos (Agrupa as consultas de um paciente)
+CREATE TABLE atendimentos (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    paciente_id UUID REFERENCES pacientes(id) ON DELETE CASCADE,
+    profissional_id UUID REFERENCES profissionais(id) ON DELETE SET NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'Aberto', -- Aberto, Encerrado
+    data_inicio TIMESTAMPTZ DEFAULT NOW(),
+    data_fim TIMESTAMPTZ
+);
+ALTER TABLE atendimentos ENABLE ROW LEVEL SECURITY;
+COMMENT ON TABLE atendimentos IS 'Agrupa um conjunto de consultas para um tratamento específico do paciente.';
+
+-- Tabela de Consultas (Visitas individuais)
+CREATE TABLE consultas (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    atendimento_id UUID REFERENCES atendimentos(id) ON DELETE CASCADE,
+    agenda_id UUID REFERENCES agendas(id) ON DELETE SET NULL,
+    paciente_id UUID REFERENCES pacientes(id) ON DELETE CASCADE,
+    data_hora TIMESTAMPTZ NOT NULL,
+    tipo_consulta VARCHAR(50) NOT NULL, -- 1ª Consulta, Rotina, Manutenção, Alta
+    anamnese TEXT,
+    status VARCHAR(50) NOT NULL DEFAULT 'Agendada', -- Agendada, Realizada, Cancelada
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE consultas ENABLE ROW LEVEL SECURITY;
+COMMENT ON TABLE consultas IS 'Registra cada consulta individual do paciente, vinculada a um atendimento.';
+
+-- Tabela de Procedimentos (Odontograma)
+CREATE TABLE procedimentos (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    consulta_id UUID REFERENCES consultas(id) ON DELETE CASCADE,
+    paciente_id UUID REFERENCES pacientes(id) ON DELETE CASCADE,
+    dente VARCHAR(10) NOT NULL, -- Ex: 11, 24, 55 (Notação FDI)
+    procedimento TEXT NOT NULL,
+    data_realizacao DATE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE procedimentos ENABLE ROW LEVEL SECURITY;
+COMMENT ON TABLE procedimentos IS 'Registra os procedimentos odontológicos realizados em cada dente do paciente.';

@@ -1,0 +1,56 @@
+import React from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { ProcedimentoFormValues, procedimentoSchema } from '../../lib/schemas';
+import Input from '../ui/Input';
+import Button from '../ui/Button';
+
+interface ProcedimentoFormProps {
+  dente: number;
+  onSubmit: (data: ProcedimentoFormValues) => void;
+  onCancel: () => void;
+}
+
+const ProcedimentoForm: React.FC<ProcedimentoFormProps> = ({ dente, onSubmit, onCancel }) => {
+  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<ProcedimentoFormValues>({
+    resolver: zodResolver(procedimentoSchema),
+  });
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+      <p className="font-semibold">Dente selecionado: <span className="text-primary-500 text-lg">{dente}</span></p>
+      <Input
+        label="Procedimento"
+        {...register('procedimento')}
+        error={errors.procedimento?.message}
+        placeholder="Ex: Restauração"
+      />
+      <Input
+        label="Face(s)"
+        {...register('face')}
+        error={errors.face?.message}
+        placeholder="Ex: O, V, M, D, L"
+      />
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Observação</label>
+        <textarea
+            {...register('observacao')}
+            rows={3}
+            className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 focus:ring-primary-500 focus:border-primary-500"
+            placeholder="Detalhes sobre o procedimento..."
+        />
+        {errors.observacao && <p className="mt-1 text-sm text-red-500">{errors.observacao.message}</p>}
+      </div>
+      <div className="flex justify-end gap-2 pt-2">
+        <Button type="button" variant="secondary" onClick={onCancel} disabled={isSubmitting}>
+          Cancelar
+        </Button>
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? 'Salvando...' : 'Salvar'}
+        </Button>
+      </div>
+    </form>
+  );
+};
+
+export default ProcedimentoForm;

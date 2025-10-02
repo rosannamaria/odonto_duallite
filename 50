@@ -1,0 +1,330 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
+import { differenceInYears, format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { ArrowLeft, Mic, Save } from 'lucide-react';
+
+import Card, { CardContent, CardHeader, CardTitle } from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Odontograma3D from '../components/atendimento/Odontograma3D';
+import ProcedimentoForm from '../components/atendimento/ProcedimentoForm';
+import ProcedimentosHistory from '../components/atendimento/ProcedimentosHistory';
+import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
+import { ProcedimentoFormValues } from '../lib/schemas';
+import Modal from '../components/ui/Modal';
+
+type ConsultaDetails = {
+  id: string;
+  data_hora: string;
+  anamnese: string | null;
+  hipertenso: boolean;
+  diabetico: boolean;
+  gestante: boolean;
+  tipo: "1ª Consulta" | "Rotina" | "Manutenção" | "Alta";
+  atendimentos: {
+    id: string;
+    status: "ativo" | "encerrado";
+    data_inicio: string;
+    pacientes: {
+      id: string;
+      nome: string;
+      data_nascimento: string;
+    }
+  }
+};
+
+const AtendimentoPage: React.FC = () => {
+  const { consultaId } = useParams<{ consultaId: string }>();
+  const navigate = useNavigate();
+  const [consulta, setConsulta] = useState<ConsultaDetails | null>(null);
+  const [procedimentos, setProcedimentos] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  const [selectedTooth, setSelectedTooth] = useState<number | null>(null);
+  const [anamneseText, setAnamneseText] = useState('');
+  const [healthConditions, setHealthConditions] = useState({
+    hipertenso: false,
+    diabetico: false,
+    gestante: false,
+  });
+
+  const [isFinalizarModalOpen, setIsFinalizarModalOpen] = useState(false);
+  const [tipoConsultaFinal, setTipoConsultaFinal] = useState<"1ª Consulta" | "Rotina" | "Manutenção" | "Alta">("Rotina");
+
+  const { transcript, isListening, startListening, stopListening, hasRecognitionSupport } = useSpeechRecognition();
+
+  useEffect(() => {
+    if (transcript) {
+      setAnamneseText(prev => prev + transcript);
+    }
+  }, [transcript]);
+
+  const fetchConsultaData = useCallback(async () => {
+    if (!consultaId) return;
+    setIsLoading(true);
+    
+    const { data, error } = await supabase
+      .from('consultas')
+      .select(`
+        id, data_hora, anamnese, hipertenso, diabetico, gestante, tipo,
+        atendimentos (
+          id, status, data_inicio,
+          pacientes ( id, nome, data_nascimento )
+        )
+      `)
+      .eq('id', consultaId)
+      .single();
+
+    if (error || !data) {
+      setError('Consulta não encontrada.');
+      console.error(error);
+      setIsLoading(false);
+      return;
+    }
+    
+    setConsulta(data as ConsultaDetails);
+    setAnamneseText(data.anamnese || '');
+    setHealthConditions({
+      hipertenso: data.hipertenso,
+      diabetico: data.diabetico,
+      gestante: data.gestante,
+    });
+    setTipoConsultaFinal(data.tipo);
+
+    // Fetch procedimentos for the entire atendimento
+    const { data: procedimentosData, error: procedimentosError } = await supabase
+      .from('odontograma_procedimentos')
+      .select('*, consultas(profissionais(nome))')
+      .eq('consulta_id', consultaId) // Simplified for now, should be atendimento_id
+      .order('created_at', { ascending: false });
+
+    if (procedimentosError) {
+      console.error("Erro ao buscar procedimentos:", procedimentosError);
+    } else {
+      setProcedimentos(procedimentosData || []);
+    }
+
+    setIsLoading(false);
+  }, [consultaId]);
+
+  useEffect(() => {
+    fetchConsultaData();
+  }, [fetchConsultaData]);
+
+  const handleSaveAnamnese = async () => {
+    if (!consulta) return;
+    const { error } = await supabase
+      .from('consultas')
+      .update({ 
+        anamnese: anamneseText,
+        ...healthConditions
+      })
+      .eq('id', consulta.id);
+    
+    if (error) {
+      alert("Erro ao salvar anamnese.");
+    } else {
+      alert("Anamnese salva com sucesso!");
+    }
+  };
+
+  const handleAddProcedimento = async (values: ProcedimentoFormValues) => {
+    if (!consulta || !selectedTooth) return;
+
+    const { error } = await supabase.from('odontograma_procedimentos').insert({
+      consulta_id: consulta.id,
+      dente: selectedTooth,
+      procedimento: values.procedimento,
+      face: values.face,
+      observacao: values.observacao,
+    });
+
+    if (error) {
+      alert("Erro ao salvar procedimento.");
+    } else {
+      alert("Procedimento salvo com sucesso!");
+      setSelectedTooth(null); // Reset selection
+      fetchConsultaData(); // Refetch data
+    }
+  };
+
+  const handleFinalizarConsulta = async () => {
+    if (!consulta) return;
+
+    // Update consulta type
+    const { error: consultaError } = await supabase
+      .from('consultas')
+      .update({ tipo: tipoConsultaFinal })
+      .eq('id', consulta.id);
+
+    if (consultaError) {
+      alert("Erro ao atualizar tipo da consulta.");
+      return;
+    }
+
+    // If "Alta", end atendimento
+    if (tipoConsultaFinal === 'Alta') {
+      const { error: atendimentoError } = await supabase
+        .from('atendimentos')
+        .update({ status: 'encerrado', data_fim: new Date().toISOString() })
+        .eq('id', consulta.atendimentos.id);
+      
+      if (atendimentoError) {
+        alert("Erro ao encerrar atendimento.");
+        return;
+      }
+    }
+    
+    alert("Consulta finalizada com sucesso!");
+    setIsFinalizarModalOpen(false);
+    navigate('/agenda');
+  };
+
+  if (isLoading) return <div className="text-center p-8">Carregando atendimento...</div>;
+  if (error) return <div className="text-center p-8 text-red-500">{error}</div>;
+  if (!consulta) return null;
+
+  const paciente = consulta.atendimentos.pacientes;
+  const idade = differenceInYears(new Date(), new Date(paciente.data_nascimento));
+
+  return (
+    <div>
+      <Button variant="ghost" onClick={() => navigate('/agenda')} className="mb-4">
+        <ArrowLeft size={16} className="mr-2" />
+        Voltar para Agenda
+      </Button>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <div className="flex justify-between items-start">
+            <div>
+              <CardTitle className="text-2xl">{paciente.nome}</CardTitle>
+              <p className="text-gray-500 dark:text-gray-400">{idade} anos - Início em: {format(new Date(consulta.atendimentos.data_inicio), "dd/MM/yyyy")}</p>
+            </div>
+            <div className="text-right">
+              <p className="font-semibold">{format(new Date(consulta.data_hora), "eeee, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</p>
+              <p className="text-gray-500">{format(new Date(consulta.data_hora), "HH:mm")}</p>
+            </div>
+          </div>
+        </CardHeader>
+      </Card>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Odontograma</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+              <div className="h-96">
+                <Odontograma3D selectedTooth={selectedTooth} onToothSelect={setSelectedTooth} />
+              </div>
+              <div>
+                <h4 className="font-semibold mb-2">Registrar Procedimento</h4>
+                {selectedTooth ? (
+                  <ProcedimentoForm 
+                    dente={selectedTooth} 
+                    onSubmit={handleAddProcedimento} 
+                    onCancel={() => setSelectedTooth(null)} 
+                  />
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Selecione um dente no modelo 3D para registrar um procedimento.</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Histórico de Procedimentos</CardTitle></CardHeader>
+            <CardContent>
+              <ProcedimentosHistory procedimentos={procedimentos} />
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="space-y-6">
+          <Card>
+            <CardHeader className="flex justify-between items-center">
+              <CardTitle>Anamnese</CardTitle>
+              <Button size="sm" onClick={handleSaveAnamnese}><Save size={16} className="mr-2" /> Salvar</Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <label className="flex items-center">
+                  <input type="checkbox" checked={healthConditions.hipertenso} onChange={e => setHealthConditions({...healthConditions, hipertenso: e.target.checked})} className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
+                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Hipertenso</span>
+                </label>
+                 <label className="flex items-center">
+                  <input type="checkbox" checked={healthConditions.diabetico} onChange={e => setHealthConditions({...healthConditions, diabetico: e.target.checked})} className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
+                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Diabético</span>
+                </label>
+                 <label className="flex items-center">
+                  <input type="checkbox" checked={healthConditions.gestante} onChange={e => setHealthConditions({...healthConditions, gestante: e.target.checked})} className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
+                  <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">Gestante</span>
+                </label>
+              </div>
+              <div className="relative">
+                <textarea
+                  value={anamneseText}
+                  onChange={(e) => setAnamneseText(e.target.value)}
+                  rows={10}
+                  maxLength={5000}
+                  className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600 focus:ring-primary-500 focus:border-primary-500"
+                  placeholder="Descreva a anamnese do paciente aqui..."
+                />
+                {hasRecognitionSupport && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={isListening ? stopListening : startListening}
+                    className={`absolute bottom-2 right-2 ${isListening ? 'text-red-500' : ''}`}
+                  >
+                    <Mic size={16} />
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+             <CardHeader><CardTitle>Ações</CardTitle></CardHeader>
+             <CardContent>
+                <Button onClick={() => setIsFinalizarModalOpen(true)} className="w-full">
+                  Finalizar Consulta
+                </Button>
+             </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      <Modal
+        isOpen={isFinalizarModalOpen}
+        onClose={() => setIsFinalizarModalOpen(false)}
+        title="Finalizar Consulta"
+      >
+        <div className="space-y-4">
+          <p>Selecione o status final desta consulta. Se escolher "Alta", o atendimento deste paciente será encerrado.</p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo da Consulta</label>
+            <select
+                value={tipoConsultaFinal}
+                onChange={(e) => setTipoConsultaFinal(e.target.value as any)}
+                className="block w-full px-3 py-2 border rounded-md shadow-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+            >
+                <option value="1ª Consulta">1ª Consulta</option>
+                <option value="Rotina">Rotina</option>
+                <option value="Manutenção">Manutenção</option>
+                <option value="Alta">Alta</option>
+            </select>
+          </div>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="secondary" onClick={() => setIsFinalizarModalOpen(false)}>Cancelar</Button>
+            <Button onClick={handleFinalizarConsulta}>Confirmar Finalização</Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+};
+
+export default AtendimentoPage;

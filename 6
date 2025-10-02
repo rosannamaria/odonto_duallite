@@ -1,0 +1,42 @@
+import React from 'react';
+import { Routes, Route } from 'react-router-dom';
+import Layout from './components/layout/Layout';
+import DashboardPage from './pages/DashboardPage';
+import AgendaPage from './pages/AgendaPage';
+import PacientesPage from './pages/PacientesPage';
+import ProfissionaisPage from './pages/ProfissionaisPage';
+import ConsultoriosPage from './pages/ConsultoriosPage';
+import ConfiguracoesPage from './pages/ConfiguracoesPage';
+import NotFoundPage from './pages/NotFoundPage';
+import LoginPage from './pages/LoginPage';
+import ProtectedRoute from './components/auth/ProtectedRoute';
+import AtendimentoPage from './pages/AtendimentoPage';
+
+function App() {
+    return (
+        <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route 
+                path="/*"
+                element={
+                    <ProtectedRoute>
+                        <Routes>
+                            <Route element={<Layout />}>
+                                <Route path="/" element={<DashboardPage />} />
+                                <Route path="/agenda" element={<AgendaPage />} />
+                                <Route path="/atendimento/:consultaId" element={<AtendimentoPage />} />
+                                <Route path="/pacientes" element={<PacientesPage />} />
+                                <Route path="/profissionais" element={<ProfissionaisPage />} />
+                                <Route path="/consultorios" element={<ConsultoriosPage />} />
+                                <Route path="/configuracoes" element={<ConfiguracoesPage />} />
+                                <Route path="*" element={<NotFoundPage />} />
+                            </Route>
+                        </Routes>
+                    </ProtectedRoute>
+                }
+            />
+        </Routes>
+    );
+}
+
+export default App;

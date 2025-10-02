@@ -1,0 +1,103 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { Check, ChevronsUpDown } from 'lucide-react';
+import Button from './Button';
+import Popover from './Popover';
+import Input from './Input';
+
+interface ComboboxItem {
+  id: string;
+  nome: string;
+}
+
+interface ComboboxProps {
+  items: ComboboxItem[];
+  value: ComboboxItem | null;
+  onChange: (item: ComboboxItem | null) => void;
+  placeholder: string;
+  label?: string;
+  onSearchChange?: (term: string) => void;
+}
+
+const Combobox: React.FC<ComboboxProps> = ({
+  items,
+  value,
+  onChange,
+  placeholder,
+  label,
+  onSearchChange,
+}) => {
+  const [open, setOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (onSearchChange) {
+      const handler = setTimeout(() => {
+        onSearchChange(searchTerm);
+      }, 300);
+      return () => clearTimeout(handler);
+    }
+  }, [searchTerm, onSearchChange]);
+
+  const handleSelect = (item: ComboboxItem) => {
+    onChange(item);
+    setOpen(false);
+    setSearchTerm('');
+  };
+
+  return (
+    <div className="w-full">
+      {label && <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</label>}
+      <Popover
+        open={open}
+        onOpenChange={setOpen}
+        trigger={
+          <button
+            ref={triggerRef}
+            role="combobox"
+            aria-expanded={open}
+            className="w-full flex items-center justify-between px-3 py-2 border rounded-md shadow-sm bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-left"
+          >
+            <span className={value ? "text-gray-900 dark:text-gray-200" : "text-gray-400"}>
+              {value ? value.nome : placeholder}
+            </span>
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </button>
+        }
+        content={
+          <div className="p-1">
+            {onSearchChange && (
+              <Input
+                placeholder="Buscar..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="mb-2"
+              />
+            )}
+            <div className="max-h-60 overflow-y-auto">
+              {items.length === 0 && !onSearchChange ? (
+                <div className="py-2 text-center text-sm text-gray-500">Nenhum item.</div>
+              ) : null}
+              {items.map((item) => (
+                <div
+                  key={item.id}
+                  onClick={() => handleSelect(item)}
+                  className="flex items-center justify-between p-2 text-sm rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+                >
+                  {item.nome}
+                  {value?.id === item.id && <Check className="h-4 w-4 text-primary-500" />}
+                </div>
+              ))}
+            </div>
+          </div>
+        }
+        contentProps={{
+            style: { width: triggerRef.current?.offsetWidth },
+            className: "p-0"
+        }}
+      />
+    </div>
+  );
+};
+
+export default Combobox;

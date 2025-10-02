@@ -1,0 +1,89 @@
+import React from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { ProfissionalFormValues, profissionalSchema } from '../../lib/schemas';
+import { Tables } from '../../types/supabase';
+import Input from '../ui/Input';
+import Button from '../ui/Button';
+
+interface ProfissionalFormProps {
+  onSubmit: (data: ProfissionalFormValues) => void;
+  isSubmitting: boolean;
+  defaultValues?: Tables<'profissionais'>;
+  onCancel: () => void;
+}
+
+const ProfissionalForm: React.FC<ProfissionalFormProps> = ({ onSubmit, isSubmitting, defaultValues, onCancel }) => {
+  const isEditing = !!defaultValues;
+
+  const { register, handleSubmit, formState: { errors } } = useForm<ProfissionalFormValues>({
+    resolver: zodResolver(profissionalSchema),
+    defaultValues: {
+      nome: defaultValues?.nome || '',
+      email: defaultValues?.email || '',
+      especialidade: defaultValues?.especialidade || '',
+      telefone: defaultValues?.telefone || '',
+    }
+  });
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Input
+          label="Nome Completo"
+          {...register('nome')}
+          error={errors.nome?.message}
+          placeholder="Ex: Dr. Fulano de Tal"
+        />
+        <Input
+          label="E-mail"
+          type="email"
+          {...register('email')}
+          error={errors.email?.message}
+          placeholder="dr.fulano@email.com"
+          disabled={isEditing} // Não permite editar email após criação
+        />
+        <Input
+          label="Especialidade"
+          {...register('especialidade')}
+          error={errors.especialidade?.message}
+          placeholder="Ex: Ortodontia"
+        />
+        <Input
+          label="Telefone"
+          {...register('telefone')}
+          error={errors.telefone?.message}
+          placeholder="(00) 90000-0000"
+        />
+        {!isEditing && (
+          <>
+            <Input
+              label="Senha"
+              type="password"
+              {...register('password')}
+              error={errors.password?.message}
+              placeholder="Mínimo 6 caracteres"
+            />
+            <Input
+              label="Confirmar Senha"
+              type="password"
+              {...register('confirmPassword')}
+              error={errors.confirmPassword?.message}
+              placeholder="Repita a senha"
+            />
+          </>
+        )}
+      </div>
+      <div className="flex items-center justify-end p-4 border-t border-gray-200 dark:border-gray-700 rounded-b mt-6 -mx-6 -mb-6">
+        <Button type="button" variant="secondary" onClick={onCancel} disabled={isSubmitting}>
+          Cancelar
+        </Button>
+        <Button type="submit" className="ml-3" disabled={isSubmitting}>
+          {isSubmitting ? 'Salvando...' : 'Salvar Profissional'}
+        </Button>
+      </div>
+    </form>
+  );
+};
+
+export default ProfissionalForm;

@@ -1,0 +1,60 @@
+import React from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { ConsultorioFormValues, consultorioSchema } from '../../lib/schemas';
+import { Tables } from '../../types/supabase';
+import Input from '../ui/Input';
+import Button from '../ui/Button';
+
+interface ConsultorioFormProps {
+  onSubmit: (data: ConsultorioFormValues) => void;
+  isSubmitting: boolean;
+  defaultValues?: Tables<'consultorios'>;
+  onCancel: () => void;
+}
+
+const ConsultorioForm: React.FC<ConsultorioFormProps> = ({ onSubmit, isSubmitting, defaultValues, onCancel }) => {
+  const { register, handleSubmit, formState: { errors } } = useForm<ConsultorioFormValues>({
+    resolver: zodResolver(consultorioSchema),
+    defaultValues: {
+      nome: defaultValues?.nome || '',
+      endereco: defaultValues?.endereco || '',
+      telefone: defaultValues?.telefone || '',
+    }
+  });
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <div className="grid grid-cols-1 gap-4">
+        <Input
+          label="Nome do Consultório"
+          {...register('nome')}
+          error={errors.nome?.message}
+          placeholder="Ex: Sala 1, Consultório Principal"
+        />
+        <Input
+          label="Endereço"
+          {...register('endereco')}
+          error={errors.endereco?.message}
+          placeholder="Rua das Flores, 123, Centro, Cidade - UF"
+        />
+        <Input
+          label="Telefone (Opcional)"
+          {...register('telefone')}
+          error={errors.telefone?.message}
+          placeholder="(00) 3000-0000"
+        />
+      </div>
+      <div className="flex items-center justify-end p-4 border-t border-gray-200 dark:border-gray-700 rounded-b mt-6 -mx-6 -mb-6">
+        <Button type="button" variant="secondary" onClick={onCancel} disabled={isSubmitting}>
+          Cancelar
+        </Button>
+        <Button type="submit" className="ml-3" disabled={isSubmitting}>
+          {isSubmitting ? 'Salvando...' : 'Salvar Consultório'}
+        </Button>
+      </div>
+    </form>
+  );
+};
+
+export default ConsultorioForm;

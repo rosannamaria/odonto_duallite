@@ -1,0 +1,97 @@
+import React, { useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { PacienteFormValues, pacienteSchema } from '../../lib/schemas';
+import { Tables } from '../../types/supabase';
+import Input from '../ui/Input';
+import Button from '../ui/Button';
+
+interface PacienteFormProps {
+  onSubmit: (data: PacienteFormValues) => void;
+  isSubmitting: boolean;
+  defaultValues?: Tables<'pacientes'>;
+  onCancel: () => void;
+}
+
+const PacienteForm: React.FC<PacienteFormProps> = ({ onSubmit, isSubmitting, defaultValues, onCancel }) => {
+  const { register, handleSubmit, formState: { errors }, reset } = useForm<PacienteFormValues>({
+    resolver: zodResolver(pacienteSchema),
+    defaultValues: {
+        nome: defaultValues?.nome || '',
+        data_nascimento: defaultValues?.data_nascimento ? new Date(defaultValues.data_nascimento).toISOString().split('T')[0] : '',
+        telefone: defaultValues?.telefone || '',
+        email: defaultValues?.email || '',
+        endereco: defaultValues?.endereco || '',
+    }
+  });
+
+  useEffect(() => {
+    if (defaultValues) {
+      reset({
+        nome: defaultValues.nome,
+        data_nascimento: new Date(defaultValues.data_nascimento).toISOString().split('T')[0],
+        telefone: defaultValues.telefone,
+        email: defaultValues.email || '',
+        endereco: defaultValues.endereco || '',
+      });
+    } else {
+        reset({
+            nome: '',
+            data_nascimento: '',
+            telefone: '',
+            email: '',
+            endereco: '',
+        });
+    }
+  }, [defaultValues, reset]);
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Input
+          label="Nome Completo"
+          {...register('nome')}
+          error={errors.nome?.message}
+          placeholder="Ex: João da Silva"
+        />
+        <Input
+          label="Data de Nascimento"
+          type="date"
+          {...register('data_nascimento')}
+          error={errors.data_nascimento?.message}
+        />
+        <Input
+          label="Telefone"
+          {...register('telefone')}
+          error={errors.telefone?.message}
+          placeholder="(00) 90000-0000"
+        />
+        <Input
+          label="E-mail"
+          type="email"
+          {...register('email')}
+          error={errors.email?.message}
+          placeholder="joao.silva@email.com"
+        />
+        <div className="md:col-span-2">
+          <Input
+            label="Endereço"
+            {...register('endereco')}
+            error={errors.endereco?.message}
+            placeholder="Rua das Flores, 123, Bairro, Cidade - UF"
+          />
+        </div>
+      </div>
+      <div className="flex items-center justify-end p-4 border-t border-gray-200 dark:border-gray-700 rounded-b mt-6 -mx-6 -mb-6">
+        <Button type="button" variant="secondary" onClick={onCancel} disabled={isSubmitting}>
+          Cancelar
+        </Button>
+        <Button type="submit" className="ml-3" disabled={isSubmitting}>
+          {isSubmitting ? 'Salvando...' : 'Salvar Paciente'}
+        </Button>
+      </div>
+    </form>
+  );
+};
+
+export default PacienteForm;

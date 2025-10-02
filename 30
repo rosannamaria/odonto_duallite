@@ -1,0 +1,134 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { Plus, Search } from 'lucide-react';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Modal from '../components/ui/Modal';
+import Input from '../components/ui/Input';
+import ConsultoriosTable from '../components/consultorios/ConsultoriosTable';
+import ConsultorioForm from '../components/consultorios/ConsultorioForm';
+import { supabase } from '../lib/supabase';
+import { Tables } from '../types/supabase';
+import { ConsultorioFormValues } from '../lib/schemas';
+
+const ConsultoriosPage: React.FC = () => {
+  const [consultorios, setConsultorios] = useState<Tables<'consultorios'>[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingConsultorio, setEditingConsultorio] = useState<Tables<'consultorios'> | undefined>(undefined);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const fetchConsultorios = useCallback(async () => {
+    setIsLoading(true);
+    let query = supabase.from('consultorios').select('*').order('nome', { ascending: true });
+
+    if (searchTerm) {
+      query = query.ilike('nome', `%${searchTerm}%`);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Erro ao buscar consultórios:', error);
+      // TODO: Adicionar notificação de erro para o usuário
+    } else {
+      setConsultorios(data || []);
+    }
+    setIsLoading(false);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+        fetchConsultorios();
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [fetchConsultorios]);
+
+  const handleOpenModal = (consultorio?: Tables<'consultorios'>) => {
+    setEditingConsultorio(consultorio);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingConsultorio(undefined);
+  };
+
+  const handleSubmit = async (values: ConsultorioFormValues) => {
+    setIsSubmitting(true);
+    
+    const { error } = editingConsultorio
+      ? await supabase.from('consultorios').update(values).eq('id', editingConsultorio.id)
+      : await supabase.from('consultorios').insert(values);
+
+    if (error) {
+      console.error('Erro ao salvar consultório:', error);
+      // TODO: Adicionar notificação de erro
+    } else {
+      // TODO: Adicionar notificação de sucesso
+      fetchConsultorios();
+      handleCloseModal();
+    }
+    setIsSubmitting(false);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Tem certeza que deseja excluir este consultório?')) {
+      const { error } = await supabase.from('consultorios').delete().eq('id', id);
+      if (error) {
+        console.error('Erro ao excluir consultório:', error);
+        // TODO: Adicionar notificação de erro
+      } else {
+        // TODO: Adicionar notificação de sucesso
+        fetchConsultorios();
+      }
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-800 dark:text-white">Consultórios</h1>
+        <Button onClick={() => handleOpenModal()} leftIcon={<Plus size={20} />}>
+          Adicionar Consultório
+        </Button>
+      </div>
+
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+            <div className="relative w-full max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                <Input
+                    placeholder="Buscar por nome..."
+                    className="pl-10"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+            </div>
+        </div>
+        <ConsultoriosTable
+          consultorios={consultorios}
+          onEdit={handleOpenModal}
+          onDelete={handleDelete}
+          isLoading={isLoading}
+        />
+      </Card>
+
+      <Modal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        title={editingConsultorio ? 'Editar Consultório' : 'Adicionar Novo Consultório'}
+      >
+        <ConsultorioForm
+          onSubmit={handleSubmit}
+          isSubmitting={isSubmitting}
+          defaultValues={editingConsultorio}
+          onCancel={handleCloseModal}
+        />
+      </Modal>
+    </div>
+  );
+};
+
+export default ConsultoriosPage;

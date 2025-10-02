@@ -1,0 +1,65 @@
+import React from 'react';
+import { Edit, Trash2 } from 'lucide-react';
+import { Tables } from '../../types/supabase';
+import Button from '../ui/Button';
+
+interface ConsultoriosTableProps {
+  consultorios: Tables<'consultorios'>[];
+  onEdit: (consultorio: Tables<'consultorios'>) => void;
+  onDelete: (id: string) => void;
+  isLoading: boolean;
+}
+
+const ConsultoriosTable: React.FC<ConsultoriosTableProps> = ({ consultorios, onEdit, onDelete, isLoading }) => {
+  if (isLoading) {
+    return (
+      <div className="text-center py-8">
+        <p>Carregando consultórios...</p>
+      </div>
+    );
+  }
+
+  if (consultorios.length === 0) {
+    return (
+      <div className="text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-lg">
+        <p className="text-gray-500 dark:text-gray-400">Nenhum consultório encontrado.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <thead className="bg-gray-50 dark:bg-gray-700">
+          <tr>
+            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nome</th>
+            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Endereço</th>
+            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Telefone</th>
+            <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Ações</th>
+          </tr>
+        </thead>
+        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+          {consultorios.map((consultorio) => (
+            <tr key={consultorio.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{consultorio.nome}</td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{consultorio.endereco}</td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{consultorio.telefone || '-'}</td>
+              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                <div className="flex items-center justify-end space-x-2">
+                  <Button variant="ghost" size="sm" onClick={() => onEdit(consultorio)}>
+                    <Edit size={16} />
+                  </Button>
+                  <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => onDelete(consultorio.id)}>
+                    <Trash2 size={16} />
+                  </Button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+export default ConsultoriosTable;

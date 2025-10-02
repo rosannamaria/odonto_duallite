@@ -1,0 +1,15 @@
+import React from 'react';
+import Card from '../components/ui/Card';
+
+const ConfiguracoesPage: React.FC = () => {
+  return (
+    <div>
+      <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-6">Configurações</h1>
+      <Card>
+        <p>Página de Configurações em construção.</p>
+      </Card>
+    </div>
+  );
+};
+
+export default ConfiguracoesPage;

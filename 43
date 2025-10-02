@@ -1,0 +1,125 @@
+import React, { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
+import Input from '../components/ui/Input';
+import Button from '../components/ui/Button';
+import { Smile } from 'lucide-react';
+
+const LoginPage: React.FC = () => {
+  const [isSigningUp, setIsSigningUp] = useState(false);
+  
+  const { register, handleSubmit, formState: { errors } } = useForm();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  const onSubmit = async (data: any) => {
+    setIsSubmitting(true);
+    setAuthError(null);
+    setAuthMessage(null);
+
+    if (isSigningUp) {
+      // Handle Sign Up
+      const { error } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+        options: {
+          data: {
+            nome: data.nome, // This will be used by the trigger to create the profissional profile
+          },
+        },
+      });
+
+      if (error) {
+        setAuthError(error.message);
+      } else {
+        setAuthMessage('Conta criada com sucesso! Por favor, verifique seu e-mail para confirmar e depois faça o login.');
+        setIsSigningUp(false); // Switch back to login view
+      }
+    } else {
+      // Handle Login
+      const { error } = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password: data.password,
+      });
+
+      if (error) {
+        setAuthError(error.message);
+      } else {
+        navigate('/');
+      }
+    }
+    setIsSubmitting(false);
+  };
+
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-lg dark:bg-gray-800">
+        <div className="text-center">
+            <div className="flex items-center justify-center mb-4">
+                <Smile className="w-10 h-10 text-primary-500" />
+                <h1 className="ml-3 text-3xl font-bold text-gray-800 dark:text-white">OdontoSoft</h1>
+            </div>
+          <h2 className="text-xl text-gray-600 dark:text-gray-300">
+            {isSigningUp ? 'Crie sua conta' : 'Acesse sua conta'}
+          </h2>
+        </div>
+
+        {authMessage && <p className="text-sm text-center text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 p-3 rounded-md">{authMessage}</p>}
+
+        <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
+          {isSigningUp && (
+            <Input
+              label="Nome Completo"
+              type="text"
+              {...register('nome', { required: 'Nome é obrigatório' })}
+              error={errors.nome?.message as string}
+              placeholder="Seu nome completo"
+            />
+          )}
+          <Input
+            label="E-mail"
+            type="email"
+            {...register('email', { required: 'E-mail é obrigatório' })}
+            error={errors.email?.message as string}
+            placeholder="seu@email.com"
+          />
+          <Input
+            label="Senha"
+            type="password"
+            {...register('password', { required: 'Senha é obrigatória', minLength: { value: 6, message: 'A senha deve ter no mínimo 6 caracteres' } })}
+            error={errors.password?.message as string}
+            placeholder="********"
+          />
+
+          {authError && <p className="text-sm text-red-500">{authError}</p>}
+          
+          <Button type="submit" className="w-full" disabled={isSubmitting} size="lg">
+            {isSubmitting
+              ? (isSigningUp ? 'Criando conta...' : 'Entrando...')
+              : (isSigningUp ? 'Criar Conta' : 'Entrar')}
+          </Button>
+        </form>
+
+        <p className="text-sm text-center text-gray-600 dark:text-gray-400">
+          {isSigningUp ? 'Já tem uma conta? ' : 'Não tem uma conta? '}
+          <button
+            type="button"
+            onClick={() => {
+              setIsSigningUp(!isSigningUp);
+              setAuthError(null);
+              setAuthMessage(null);
+            }}
+            className="font-medium text-primary-600 hover:text-primary-500"
+          >
+            {isSigningUp ? 'Faça login' : 'Cadastre-se'}
+          </button>
+        </p>
+      </div>
+    </div>
+  );
+};
+
+export default LoginPage;

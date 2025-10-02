@@ -1,0 +1,108 @@
+/*
+# [Security Hardening: Update Functions and Set Initial RLS Policies]
+This migration script addresses security warnings by setting a fixed search_path for database functions and establishing baseline Row Level Security (RLS) policies for all tables.
+
+## Query Description:
+This operation enhances security.
+1.  **Function Updates**: It modifies existing functions to explicitly set the `search_path`. This prevents potential hijacking attacks where a malicious user could create objects (like functions or tables) in other schemas that would be executed unexpectedly.
+2.  **RLS Policies**: It creates initial RLS policies for all data tables. The policy grants full access (SELECT, INSERT, UPDATE, DELETE) to any user who is authenticated. Unauthenticated users will have no access. This is a critical security measure to protect your data, ensuring only logged-in users can interact with it. No data will be lost or altered by this script.
+
+## Metadata:
+- Schema-Category: ["Structural", "Safe"]
+- Impact-Level: ["Low"]
+- Requires-Backup: false
+- Reversible: true
+
+## Structure Details:
+- **Functions Modified**: `handle_new_user`, `update_updated_at_column`
+- **Tables Affected (RLS Policies Added)**: `pacientes`, `profissionais`, `consultorios`, `atendimentos`, `consultas`, `odontograma_procedimentos`
+
+## Security Implications:
+- RLS Status: Policies will be created for all tables where RLS is enabled.
+- Policy Changes: Yes. This script introduces the baseline security policy.
+- Auth Requirements: Policies are based on the `authenticated` role provided by Supabase Auth.
+
+## Performance Impact:
+- Indexes: None
+- Triggers: None
+- Estimated Impact: Negligible. RLS introduces a minor overhead on queries, but it's essential for security and generally highly optimized in PostgreSQL.
+*/
+
+-- Harden handle_new_user function against search_path attacks
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.profissionais (id, nome, email)
+  VALUES (new.id, new.raw_user_meta_data->>'nome', new.email);
+  RETURN new;
+END;
+$$;
+
+-- Harden update_updated_at_column function against search_path attacks
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+   NEW.updated_at = now();
+   RETURN NEW;
+END;
+$$ LANGUAGE plpgsql
+SET search_path = public;
+
+
+-- RLS Policies for 'pacientes'
+ALTER TABLE public.pacientes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow authenticated users full access" ON public.pacientes;
+CREATE POLICY "Allow authenticated users full access" ON public.pacientes
+FOR ALL
+TO authenticated
+USING (true)
+WITH CHECK (true);
+
+-- RLS Policies for 'profissionais'
+ALTER TABLE public.profissionais ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow authenticated users full access" ON public.profissionais;
+CREATE POLICY "Allow authenticated users full access" ON public.profissionais
+FOR ALL
+TO authenticated
+USING (true)
+WITH CHECK (true);
+
+-- RLS Policies for 'consultorios'
+ALTER TABLE public.consultorios ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow authenticated users full access" ON public.consultorios;
+CREATE POLICY "Allow authenticated users full access" ON public.consultorios
+FOR ALL
+TO authenticated
+USING (true)
+WITH CHECK (true);
+
+-- RLS Policies for 'atendimentos'
+ALTER TABLE public.atendimentos ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow authenticated users full access" ON public.atendimentos;
+CREATE POLICY "Allow authenticated users full access" ON public.atendimentos
+FOR ALL
+TO authenticated
+USING (true)
+WITH CHECK (true);
+
+-- RLS Policies for 'consultas'
+ALTER TABLE public.consultas ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow authenticated users full access" ON public.consultas;
+CREATE POLICY "Allow authenticated users full access" ON public.consultas
+FOR ALL
+TO authenticated
+USING (true)
+WITH CHECK (true);
+
+-- RLS Policies for 'odontograma_procedimentos'
+ALTER TABLE public.odontograma_procedimentos ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow authenticated users full access" ON public.odontograma_procedimentos;
+CREATE POLICY "Allow authenticated users full access" ON public.odontograma_procedimentos
+FOR ALL
+TO authenticated
+USING (true)
+WITH CHECK (true);

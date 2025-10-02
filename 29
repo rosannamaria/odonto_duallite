@@ -1,0 +1,169 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { Plus, Search } from 'lucide-react';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Modal from '../components/ui/Modal';
+import Input from '../components/ui/Input';
+import ProfissionaisTable from '../components/profissionais/ProfissionaisTable';
+import ProfissionalForm from '../components/profissionais/ProfissionalForm';
+import { supabase } from '../lib/supabase';
+import { Tables } from '../types/supabase';
+import { ProfissionalFormValues } from '../lib/schemas';
+
+const ProfissionaisPage: React.FC = () => {
+  const [profissionais, setProfissionais] = useState<Tables<'profissionais'>[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingProfissional, setEditingProfissional] = useState<Tables<'profissionais'> | undefined>(undefined);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchProfissionais = useCallback(async () => {
+    setIsLoading(true);
+    let query = supabase.from('profissionais').select('*').order('nome', { ascending: true });
+
+    if (searchTerm) {
+      query = query.ilike('nome', `%${searchTerm}%`);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Erro ao buscar profissionais:', error);
+      setError('Não foi possível carregar os profissionais.');
+    } else {
+      setProfissionais(data || []);
+      setError(null);
+    }
+    setIsLoading(false);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      fetchProfissionais();
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [fetchProfissionais]);
+
+  const handleOpenModal = (profissional?: Tables<'profissionais'>) => {
+    setEditingProfissional(profissional);
+    setIsModalOpen(true);
+    setError(null);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingProfissional(undefined);
+  };
+
+  const handleSubmit = async (values: ProfissionalFormValues) => {
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      if (editingProfissional) {
+        // Editando um profissional existente
+        const { error: updateError } = await supabase
+          .from('profissionais')
+          .update({
+            nome: values.nome,
+            especialidade: values.especialidade,
+            telefone: values.telefone,
+          })
+          .eq('id', editingProfissional.id);
+
+        if (updateError) throw updateError;
+
+      } else {
+        // Criando um novo profissional e usuário de autenticação
+        if (!values.password) {
+            throw new Error("A senha é obrigatória para criar um novo profissional.");
+        }
+        
+        // 1. Criar o usuário no Supabase Auth
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: values.email,
+          password: values.password,
+        });
+
+        if (authError) throw authError;
+        if (!authData.user) throw new Error('Não foi possível criar o usuário de autenticação.');
+
+        // 2. Inserir o perfil na tabela 'profissionais'
+        const { error: profileError } = await supabase
+          .from('profissionais')
+          .insert({
+            id: authData.user.id, // Link com o usuário autenticado
+            nome: values.nome,
+            email: values.email,
+            especialidade: values.especialidade,
+            telefone: values.telefone,
+          });
+        
+        if (profileError) {
+          // Se a criação do perfil falhar, idealmente deveríamos deletar o usuário criado no auth.
+          // Isso requer privilégios de admin, então por enquanto apenas logamos o erro.
+          console.error("Erro ao criar perfil, mas usuário de auth foi criado:", authData.user.id);
+          throw profileError;
+        }
+      }
+
+      // Sucesso
+      fetchProfissionais();
+      handleCloseModal();
+    } catch (error: any) {
+      console.error('Erro ao salvar profissional:', error);
+      setError(error.message || 'Ocorreu um erro inesperado.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-800 dark:text-white">Profissionais</h1>
+        <Button onClick={() => handleOpenModal()} leftIcon={<Plus size={20} />}>
+          Adicionar Profissional
+        </Button>
+      </div>
+
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <div className="relative w-full max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+            <Input
+              placeholder="Buscar por nome..."
+              className="pl-10"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
+        <ProfissionaisTable
+          profissionais={profissionais}
+          onEdit={handleOpenModal}
+          isLoading={isLoading}
+        />
+      </Card>
+
+      <Modal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        title={editingProfissional ? 'Editar Profissional' : 'Adicionar Novo Profissional'}
+      >
+        {error && <p className="mb-4 text-center text-sm text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 p-3 rounded-md">{error}</p>}
+        <ProfissionalForm
+          onSubmit={handleSubmit}
+          isSubmitting={isSubmitting}
+          defaultValues={editingProfissional}
+          onCancel={handleCloseModal}
+        />
+      </Modal>
+    </div>
+  );
+};
+
+export default ProfissionaisPage;

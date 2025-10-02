@@ -1,0 +1,206 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { format, addDays, subDays, startOfDay } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { supabase } from '../lib/supabase';
+import { Tables } from '../types/supabase';
+import { AgendamentoFormValues } from '../lib/schemas';
+
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Modal from '../components/ui/Modal';
+import AgendaView from '../components/agenda/AgendaView';
+import AgendamentoForm from '../components/agenda/AgendamentoForm';
+import Combobox from '../components/ui/Combobox';
+
+type Profissional = Pick<Tables<'profissionais'>, 'id' | 'nome'>;
+type Consultorio = Pick<Tables<'consultorios'>, 'id' | 'nome'>;
+
+const AgendaPage: React.FC = () => {
+  const [currentDate, setCurrentDate] = useState(startOfDay(new Date()));
+  const [consultas, setConsultas] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const [profissionais, setProfissionais] = useState<Profissional[]>([]);
+  const [consultorios, setConsultorios] = useState<Consultorio[]>([]);
+  
+  const [selectedProfissional, setSelectedProfissional] = useState<Profissional | null>(null);
+  const [selectedConsultorio, setSelectedConsultorio] = useState<Consultorio | null>(null);
+  
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [horarioAgendamento, setHorarioAgendamento] = useState<Date | null>(null);
+
+  const fetchConsultas = useCallback(async () => {
+    if (!selectedProfissional || !selectedConsultorio) {
+      setConsultas([]);
+      return;
+    }
+    
+    setIsLoading(true);
+    const startOfDay = format(currentDate, 'yyyy-MM-dd HH:mm:ss');
+    const endOfDay = format(addDays(currentDate, 1), 'yyyy-MM-dd HH:mm:ss');
+
+    const { data, error } = await supabase
+      .from('consultas')
+      .select(`
+        *,
+        atendimentos (
+          pacientes ( id, nome )
+        )
+      `)
+      .eq('profissional_id', selectedProfissional.id)
+      .eq('consultorio_id', selectedConsultorio.id)
+      .gte('data_hora', startOfDay)
+      .lt('data_hora', endOfDay)
+      .order('data_hora', { ascending: true });
+
+    if (error) {
+      console.error('Erro ao buscar consultas:', error);
+    } else {
+      setConsultas(data || []);
+    }
+    setIsLoading(false);
+  }, [currentDate, selectedProfissional, selectedConsultorio]);
+
+  const fetchDropdownData = async () => {
+    const { data: profData, error: profError } = await supabase.from('profissionais').select('id, nome');
+    if (profData) setProfissionais(profData);
+    
+    const { data: consData, error: consError } = await supabase.from('consultorios').select('id, nome');
+    if (consData) setConsultorios(consData);
+  };
+
+  useEffect(() => {
+    fetchDropdownData();
+  }, []);
+
+  useEffect(() => {
+    fetchConsultas();
+  }, [fetchConsultas]);
+
+  const handleOpenModal = (horario: Date) => {
+    setHorarioAgendamento(horario);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setHorarioAgendamento(null);
+  };
+
+  const handleSubmit = async (values: AgendamentoFormValues) => {
+    if (!horarioAgendamento || !selectedProfissional || !selectedConsultorio || !values.paciente) return;
+    
+    setIsSubmitting(true);
+    
+    try {
+      // 1. Verificar se existe um atendimento ativo para o paciente
+      let { data: atendimentoAtivo } = await supabase
+        .from('atendimentos')
+        .select('id')
+        .eq('paciente_id', values.paciente.id)
+        .eq('status', 'ativo')
+        .single();
+
+      // 2. Se não existir, criar um novo atendimento
+      if (!atendimentoAtivo) {
+        const { data: novoAtendimento, error: atendimentoError } = await supabase
+          .from('atendimentos')
+          .insert({ paciente_id: values.paciente.id })
+          .select('id')
+          .single();
+        if (atendimentoError) throw atendimentoError;
+        atendimentoAtivo = novoAtendimento;
+      }
+      
+      if (!atendimentoAtivo) throw new Error("Não foi possível obter ou criar o atendimento.");
+
+      // 3. Criar a consulta
+      const { error: consultaError } = await supabase.from('consultas').insert({
+        atendimento_id: atendimentoAtivo.id,
+        profissional_id: selectedProfissional.id,
+        consultorio_id: selectedConsultorio.id,
+        data_hora: horarioAgendamento.toISOString(),
+        tipo: values.tipo,
+        observacoes: values.observacoes,
+      });
+
+      if (consultaError) throw consultaError;
+      
+      // Sucesso
+      fetchConsultas();
+      handleCloseModal();
+
+    } catch (error) {
+      console.error("Erro ao agendar consulta:", error);
+      // TODO: Adicionar notificação de erro
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+        <h1 className="text-3xl font-bold text-gray-800 dark:text-white">Agenda</h1>
+        
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" onClick={() => setCurrentDate(subDays(currentDate, 1))}><ChevronLeft /></Button>
+          <span className="text-lg font-semibold text-gray-700 dark:text-gray-200 capitalize">
+            {format(currentDate, "eeee, dd 'de' MMMM", { locale: ptBR })}
+          </span>
+          <Button variant="ghost" onClick={() => setCurrentDate(addDays(currentDate, 1))}><ChevronRight /></Button>
+        </div>
+      </div>
+
+      <Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
+          <Combobox
+            items={profissionais}
+            value={selectedProfissional}
+            onChange={setSelectedProfissional}
+            placeholder="Selecione um profissional"
+            label="Profissional"
+          />
+          <Combobox
+            items={consultorios}
+            value={selectedConsultorio}
+            onChange={setSelectedConsultorio}
+            placeholder="Selecione um consultório"
+            label="Consultório"
+          />
+        </div>
+
+        {selectedProfissional && selectedConsultorio ? (
+          <AgendaView
+            consultas={consultas}
+            date={currentDate}
+            onSlotClick={handleOpenModal}
+            isLoading={isLoading}
+          />
+        ) : (
+          <div className="text-center py-16 text-gray-500 dark:text-gray-400">
+            <p>Por favor, selecione um profissional e um consultório para ver a agenda.</p>
+          </div>
+        )}
+      </Card>
+
+      <Modal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        title={`Novo Agendamento - ${horarioAgendamento ? format(horarioAgendamento, 'dd/MM/yyyy HH:mm') : ''}`}
+      >
+        {horarioAgendamento && (
+          <AgendamentoForm
+            onSubmit={handleSubmit}
+            isSubmitting={isSubmitting}
+            onCancel={handleCloseModal}
+          />
+        )}
+      </Modal>
+    </div>
+  );
+};
+
+export default AgendaPage;
